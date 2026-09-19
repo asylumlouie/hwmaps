@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Haddonfield maps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Special+Elite&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --bg:#e9e2d0; --panel:#f3eee0; --ink:#1c2226; --muted:#5d666b; --line:#c9bfa5; --stage:#d9d1bb;
+  --accent:#b8570b; --onaccent:#ffffff; --btn:#f8f4e8; --btnhover:#efe7d2; --focus:#0a5ea8;
+  --pin:#f8f4e8; --pinink:#1c2226; --key-red:#c0392b; --key-blue:#1f5fa8; --med:#c0392b; --live:#2f7a43;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1418; --panel:#141d22; --ink:#e7e3d6; --muted:#8e9a9f; --line:#26343b; --stage:#0a1013;
+    --accent:#f2a900; --onaccent:#1a1200; --btn:#1a262c; --btnhover:#223139; --focus:#6cb6ff;
+    --pin:#101a1f; --pinink:#e7e3d6; --key-red:#ef6a5c; --key-blue:#6cb6ff; --med:#ef6a5c; --live:#5cc27a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1418; --panel:#141d22; --ink:#e7e3d6; --muted:#8e9a9f; --line:#26343b; --stage:#0a1013;
+  --accent:#f2a900; --onaccent:#1a1200; --btn:#1a262c; --btnhover:#223139; --focus:#6cb6ff;
+  --pin:#101a1f; --pinink:#e7e3d6; --key-red:#ef6a5c; --key-blue:#6cb6ff; --med:#ef6a5c; --live:#5cc27a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:252px minmax(0,1fr);height:100vh;height:100dvh}
+
+.rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:18px;padding:20px 14px;min-height:0;overflow-y:auto}
+.head h1{font-family:'Special Elite','Courier New',monospace;font-weight:400;font-size:26px;line-height:1.1;margin:0}
+.head p{margin:6px 0 0;color:var(--muted);font-size:13.5px;line-height:1.45}
+.status{display:flex;align-items:center;gap:7px;margin:8px 0 0;font-size:12.5px;color:var(--muted);line-height:1.35}
+.dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.status.live .dot{background:var(--live)}
+.tabs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tab{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:center;width:100%;padding:7px;text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer}
+.tab:hover{background:var(--btnhover)}
+.tab[aria-current="true"]{background:var(--btn);border-color:var(--line);box-shadow:inset 3px 0 0 var(--accent)}
+.thumb{width:52px;height:40px;border-radius:4px;border:1px dashed var(--line);background:var(--stage) center/cover no-repeat}
+.thumb.has{border-style:solid}
+.name{display:block;font-family:'Special Elite','Courier New',monospace;font-size:15px;line-height:1.2}
+.stat{display:block;margin-top:2px;font-size:12.5px;color:var(--muted)}
+
+.kit h2{font-family:'Special Elite','Courier New',monospace;font-weight:400;font-size:17px;margin:0 0 2px}
+.kit .note{margin:0 0 8px;color:var(--muted);font-size:12.5px;line-height:1.4}
+.palette{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.pick{display:flex;align-items:center;gap:7px;width:100%;padding:6px 7px;background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer;text-align:left;font-size:12.5px;line-height:1.15}
+.pick:hover{background:var(--btnhover)}
+.pick[aria-pressed="true"]{background:var(--btn);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.pick svg{flex:0 0 20px;width:20px;height:20px}
+.pick span{min-width:0}
+
+.btn.wide{display:block;width:100%;margin-top:8px;text-align:center}
+.btn.wide[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+.items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.item{display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:pointer;font-size:13.5px}
+.item:hover{background:var(--btnhover)}
+.item input{width:16px;height:16px;accent-color:var(--accent);flex:0 0 auto}
+.item svg{flex:0 0 18px;width:18px;height:18px}
+.item span{min-width:0}
+.item.got span{color:var(--muted);text-decoration:line-through}
+.view.erasing{cursor:crosshair}
+.view.erasing .mark:hover{border-color:var(--key-red);box-shadow:0 0 0 2px var(--key-red),0 1px 4px rgba(0,0,0,.35)}
+
+.help{margin-top:auto;color:var(--muted);font-size:13px;line-height:1.5}
+.help p{margin:0 0 6px}
+
+.stage{position:relative;min-width:0;min-height:0;background:var(--stage);overflow:hidden}
+.view{position:absolute;inset:0;overflow:hidden;cursor:grab;touch-action:none}
+.view.drag{cursor:grabbing}
+.view.placing{cursor:crosshair}
+#img{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0;user-select:none;-webkit-user-drag:none}
+#img[hidden]{display:none}
+
+.marks{position:absolute;inset:0;pointer-events:none}
+.mark{position:absolute;left:0;top:0;width:34px;height:34px;display:grid;place-items:center;padding:0;background:var(--pin);color:var(--pinink);
+  border:1px solid var(--line);border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:grab;pointer-events:auto;touch-action:none}
+.mark:active{cursor:grabbing}
+.mark svg{width:21px;height:21px;display:block}
+.mark.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent),0 1px 4px rgba(0,0,0,.35)}
+.mark.red{color:var(--key-red)} .mark.blue{color:var(--key-blue)} .mark.med{color:var(--med)}
+
+.empty{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px 24px 90px;text-align:center}
+.empty[hidden]{display:none}
+.empty h2{font-family:'Special Elite','Courier New',monospace;font-weight:400;font-size:28px;margin:0}
+.empty p{margin:0;max-width:38ch;color:var(--muted);line-height:1.5}
+#choose[hidden]{display:none}
+
+.toolbar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;max-width:calc(100% - 20px)}
+.toolbar[hidden]{display:none}
+.btn{background:var(--btn);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font-weight:500;font-size:14px;cursor:pointer;line-height:1.2}
+.btn:hover{background:var(--btnhover)}
+.btn[hidden]{display:none}
+.btn.icon{width:36px;padding:7px 0;font-size:17px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+.markbar{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:6px}
+.markbar[hidden]{display:none}
+.markbar .who{padding:0 6px;font-size:13.5px;color:var(--muted)}
+
+.toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--bg);padding:8px 12px;border-radius:6px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .15s}
+.toast.show{opacity:1;pointer-events:auto}
+.toast button{background:transparent;border:1px solid currentColor;color:inherit;border-radius:5px;padding:3px 9px;font-size:13px;cursor:pointer}
+.toast button[hidden]{display:none}
+
+.confirm{position:absolute;inset:0;z-index:20;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:20px}
+.confirm[hidden]{display:none}
+.confirmBox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.confirmBox p{margin:0 0 14px;line-height:1.4;font-size:14.5px}
+.confirmBtns{display:flex;justify-content:flex-end;gap:8px}
+
+@media (max-width:720px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .rail{order:2;border-right:0;border-top:1px solid var(--line);padding:8px;gap:8px;overflow:visible}
+  .head,.help,.kit h2,.kit .note{display:none}
+  .tabs{flex-direction:row;overflow-x:auto}
+  .tabs li{flex:0 0 auto}
+  .tab{grid-template-columns:minmax(0,1fr);min-width:150px}
+  .thumb{display:none}
+  .palette{display:flex;overflow-x:auto;gap:4px}
+  .palette li{flex:0 0 auto}
+  .pick span{display:none}
+  .pick{padding:7px}
+  .btn.wide{margin-top:6px;padding:6px;font-size:13.5px}
+  .items{flex-direction:row;overflow-x:auto;gap:6px}
+  .items li{flex:0 0 auto}
+  .item span:last-child{display:none}
+  .toolbar{bottom:8px}
+  .markbar{bottom:58px}
+}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="head">
+      <h1>Haddonfield</h1>
+      <p>Screenshots of the four Halloween: The Game maps, marked up together.</p>
+      <p class="status" id="status"><span class="dot"></span><span id="statusText">Starting up</span></p>
+    </div>
+    <ul class="tabs" id="tabs"></ul>
+
+    <div class="kit">
+      <h2>Markers</h2>
+      <p class="note">Pick one, then click the map to drop it. Drag a marker to move it.</p>
+      <ul class="palette" id="palette"></ul>
+      <button class="btn wide" id="eraser" type="button" aria-pressed="false">Remove markers</button>
+    </div>
+
+    <div class="kit">
+      <h2>Items</h2>
+      <p class="note">Check off what you've actually picked up, no icon needed.</p>
+      <ul class="items" id="items"></ul>
+    </div>
+
+    <div class="help">
+      <p>Send this HTML file to your friend (email, Drive, etc.) and have them open it too — no account needed. Markers and items sync live between you.</p>
+      <p>To take markers off, turn on "Remove markers" and click them, right-click one, or select one and press Delete.</p>
+      <p>Scroll to zoom and drag to move the map. Double-click to fit it. Press 1 to 4 to switch maps, Esc to put a marker down.</p>
+    </div>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="view" id="view">
+      <img id="img" alt="" draggable="false" hidden>
+      <div class="marks" id="marks"></div>
+    </div>
+
+    <div class="empty" id="empty">
+      <h2 id="emptyName"></h2>
+      <p id="emptyNote">No screenshot yet. Paste one with Ctrl+V, drop a file here, or choose one.</p>
+      <button class="btn primary" id="choose" type="button">Choose image</button>
+    </div>
+
+    <div class="markbar" id="markbar" role="toolbar" aria-label="Selected marker">
+      <span class="who" id="markName"></span>
+      <button class="btn icon" id="rotl" type="button" aria-label="Turn marker left">&#8634;</button>
+      <button class="btn icon" id="rotr" type="button" aria-label="Turn marker right">&#8635;</button>
+      <button class="btn" id="del" type="button">Remove marker</button>
+    </div>
+
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Map controls" hidden>
+      <button class="btn icon" id="zout" type="button" aria-label="Zoom out">&minus;</button>
+      <button class="btn icon" id="zin" type="button" aria-label="Zoom in">+</button>
+      <button class="btn" id="fit" type="button">Fit map</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn" id="clear" type="button">Clear markers</button>
+      <button class="btn" id="clearAll" type="button">Clear all maps</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn" id="replace" type="button">Replace screenshot</button>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <span id="toastText"></span>
+      <button type="button" id="undo" hidden>Undo</button>
+    </div>
+    <div class="confirm" id="confirm" hidden>
+      <div class="confirmBox" role="alertdialog" aria-modal="true" aria-labelledby="confirmText">
+        <p id="confirmText"></p>
+        <div class="confirmBtns">
+          <button class="btn" id="confirmNo" type="button">Cancel</button>
+          <button class="btn primary" id="confirmYes" type="button">Clear</button>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const MAPS = [
+  { id: 'heights', name: 'Haddonfield Heights' },
+  { id: 'town',    name: 'Haddonfield Town Center' },
+  { id: 'orange',  name: 'Orange Grove Estates' },
+  { id: 'east',    name: 'East Haddonfield' }
+];
+
+const SW = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const SF = 'fill="currentColor" stroke="none"';
+const ICONS = [
+  { id:'bolt', name:'Bolt cutters', svg:`<svg viewBox="0 0 24 24" ${SW}><path d="M5.6 3.2 11 9.4M18.4 3.2 13 9.4"/><path d="M10.9 11.2 7.4 21M13.1 11.2 16.6 21"/><circle cx="12" cy="10.3" r="1.6"/></svg>` },
+  { id:'gun', name:'Gun', svg:`<svg viewBox="0 0 24 24" ${SF}><path d="M2.4 7.4h18.1c.9 0 1.5.7 1.5 1.5v2.6h-6.7l-1.3 2.4H9.9l-1.7 4.4H4.5l1.2-4.4H2.4z"/></svg>` },
+  { id:'knife', name:'Knife', svg:`<svg viewBox="0 0 24 24" ${SF}><path d="M21.4 2.6a1.3 1.3 0 0 0-1.9 0L10 12.1l2.8 2.8 8.6-8.6a2 2 0 0 0 0-3.7z"/><path d="M9.3 13.1 2.7 19.7a2 2 0 1 0 2.8 2.8l6.6-6.6z"/></svg>` },
+  { id:'med', name:'Medical', tint:'med', svg:`<svg viewBox="0 0 24 24" ${SF}><path d="M9.2 2.6h5.6v6.6h6.6v5.6h-6.6v6.6H9.2v-6.6H2.6V9.2h6.6z"/></svg>` },
+  { id:'keyred', name:'Red key', tint:'red', svg:`<svg viewBox="0 0 24 24" ${SW}><circle cx="8.4" cy="8.4" r="4.4"/><circle cx="8.4" cy="8.4" r="1.1"/><path d="M11.6 11.6 20.2 20.2M16.3 16.3l-1.9 1.9M18.3 18.3l-1.9 1.9"/></svg>` },
+  { id:'keyblue', name:'Blue key', tint:'blue', svg:`<svg viewBox="0 0 24 24" ${SW}><circle cx="8.4" cy="8.4" r="4.4"/><circle cx="8.4" cy="8.4" r="1.1"/><path d="M11.6 11.6 20.2 20.2M16.3 16.3l-1.9 1.9M18.3 18.3l-1.9 1.9"/></svg>` },
+  { id:'keypad', name:'Keypad', svg:`<svg viewBox="0 0 24 24" ${SW}><rect x="4.5" y="2.5" width="15" height="19" rx="2.2"/><path d="M7.5 6.2h9"/><g ${SF}><circle cx="8.3" cy="11" r="1"/><circle cx="12" cy="11" r="1"/><circle cx="15.7" cy="11" r="1"/><circle cx="8.3" cy="14.6" r="1"/><circle cx="12" cy="14.6" r="1"/><circle cx="15.7" cy="14.6" r="1"/><circle cx="8.3" cy="18.2" r="1"/><circle cx="12" cy="18.2" r="1"/><circle cx="15.7" cy="18.2" r="1"/></g></svg>` },
+  { id:'car', name:'Car', svg:`<svg viewBox="0 0 24 24" ${SF}><path d="M2 17.1v-3.3l2.4-5.1A3 3 0 0 1 7.1 7h9.8a3 3 0 0 1 2.7 1.7l2.4 5.1v3.3h-2.2a3 3 0 1 0-5.6 0h-4.4a3 3 0 1 0-5.6 0z"/><circle cx="7" cy="17.3" r="2.3"/><circle cx="17" cy="17.3" r="2.3"/></svg>` },
+  { id:'gas', name:'Gas can', svg:`<svg viewBox="0 0 24 24" ${SW}><rect x="3.5" y="7.4" width="11" height="12.6" rx="1.6"/><path d="M6.6 7.4V6a1.5 1.5 0 0 1 1.5-1.5h3.2"/><path d="M14.5 10.8h2.8l2.4-3.3 1.3 1-2.6 3.6"/><path d="M6.3 12.6h5.4"/></svg>` },
+  { id:'star', name:'Star', svg:`<svg viewBox="0 0 24 24" ${SF}><path d="M12 2.6l2.9 6.1 6.6.8-4.9 4.6 1.3 6.5-5.9-3.3-5.9 3.3 1.3-6.5-4.9-4.6 6.6-.8z"/></svg>` },
+  { id:'closed', name:'Closed', svg:`<svg viewBox="0 0 24 24" ${SW}><rect x="4.5" y="10.4" width="15" height="10.2" rx="1.8"/><path d="M7.6 10.4V7.2a4.4 4.4 0 0 1 8.8 0v3.2"/><circle cx="12" cy="14.7" r="1.3" ${SF}/><path d="M12 16v2"/></svg>` },
+  { id:'machete', name:'Weapon', svg:`<svg viewBox="0 0 24 24" ${SF}><path d="M20.6 3.4c.6.6.6 1.6 0 2.2L9.4 16.8l-3-3L17.6 2.6a1.6 1.6 0 0 1 2.3 0z"/><path d="M9.2 15.9l-2 2-3.4 5 5-3.4 2-2z"/></svg>` }
+];
+const ICON = {}; ICONS.forEach(i => ICON[i.id] = i);
+const ITEMS = [{ id: 'bolt', name: 'Bolt cutters' }];
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD8rGgEOdzu11sLcbKZccH9Hd_1A89kM7g",
+  authDomain: "halloween-maps-e0c0c.firebaseapp.com",
+  projectId: "halloween-maps-e0c0c",
+  storageBucket: "halloween-maps-e0c0c.firebasestorage.app",
+  messagingSenderId: "169455356993",
+  appId: "1:169455356993:web:f13c34affbf2ecf24d8ac0"
+};
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), view = $('#view'), img = $('#img'), marksEl = $('#marks');
+
+const S = {};
+MAPS.forEach(m => S[m.id] = { url: null, w: 0, h: 0, v: null, fitted: true, marks: [] });
+const GOT = {};
+ITEMS.forEach(i => GOT[i.id] = false);
+
+let cur = MAPS[0].id;
+try { const saved = localStorage.getItem('hm:cur'); if (saved && S[saved]) cur = saved; } catch (e) {}
+let W = 1, H = 1, shownUrl = null;
+let tool = null;      // icon waiting to be placed
+let erase = false;    // click a marker to remove it
+let sel = null;       // index of the selected marker on the current map
+let undoData = null;  // last cleared markers
+
+let mode = 'starting'; // 'shared' | 'local'
+let fdb = null;        // Firestore instance, once connected
+const pendingSnap = {};
+
+/* ---------- shared store (Firestore) ---------- */
+function docBody(id) {
+  const st = S[id];
+  return { marks: st.marks.map(k => ({ t: k.t, x: k.x, y: k.y, r: k.r || 0 })) };
+}
+const writing = {};
+function writeDoc(id) {
+  if (!fdb) return;
+  if (writing[id]) { writing[id].again = true; return; }
+  const tok = { again: false };
+  writing[id] = tok;
+  fdb.collection('maps').doc(id).set(docBody(id))
+    .catch(err => { console.error('writeDoc failed:', err); flash('That change could not be saved (' + (err && err.code || 'error') + ').'); })
+    .finally(() => { writing[id] = null; if (tok.again) writeDoc(id); });
+}
+function writeItems() {
+  if (!fdb) return;
+  fdb.collection('state').doc('items').set({ got: GOT })
+    .catch(err => { console.error('writeItems failed:', err); flash('That change could not be saved (' + (err && err.code || 'error') + ').'); });
+}
+function cleanMarks(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(k => k && ICON[k.t]).slice(0, 400).map(k => ({
+    t: k.t, x: Math.min(1, Math.max(0, +k.x || 0)), y: Math.min(1, Math.max(0, +k.y || 0)), r: +k.r || 0
+  }));
+}
+function subscribe() {
+  fdb.collection('maps').onSnapshot(snap => {
+    snap.forEach(d => {
+      const st = S[d.id]; if (!st) return;
+      const v = d.data() || {};
+      const marks = cleanMarks(v.marks);
+      if (mdrag && d.id === cur) pendingSnap[d.id] = marks;
+      else st.marks = marks;
+    });
+    if (sel !== null && !S[cur].marks[sel]) sel = null;
+    buildTabs(); render();
+    if (!mdrag) buildMarks();
+  }, err => { console.error('maps onSnapshot failed:', err); flash('Live updates stopped (' + (err && (err.code || err.message) || 'unknown error') + '). Reload to reconnect.'); });
+  fdb.collection('state').doc('items').onSnapshot(snap => {
+    const v = (snap.exists && snap.data()) || {};
+    const got = v.got || {};
+    ITEMS.forEach(i => GOT[i.id] = !!got[i.id]);
+    buildItems();
+  }, () => {});
+}
+
+/* ---------- local store (used when this page runs on its own) ---------- */
+function idb() {
+  return new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open('haddonfield-maps', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('maps');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+}
+async function dbGet(id) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const q = db.transaction('maps').objectStore('maps').get(id);
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+async function dbPut(id, blob) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const t = db.transaction('maps', 'readwrite');
+    t.objectStore('maps').put(blob, id);
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error);
+  });
+}
+function loadLocalMarks() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('hm:marks') || '{}');
+    MAPS.forEach(m => S[m.id].marks = cleanMarks(raw[m.id]));
+  } catch (e) {}
+  try {
+    const got = JSON.parse(localStorage.getItem('hm:items') || '{}');
+    ITEMS.forEach(i => GOT[i.id] = !!got[i.id]);
+  } catch (e) {}
+}
+function saveLocalItems() {
+  try { localStorage.setItem('hm:items', JSON.stringify(GOT)); }
+  catch (e) { flash('Items could not be saved in this browser.'); }
+}
+function saveLocalMarks() {
+  const out = {};
+  MAPS.forEach(m => out[m.id] = S[m.id].marks);
+  try { localStorage.setItem('hm:marks', JSON.stringify(out)); }
+  catch (e) { flash('Markers could not be saved in this browser.'); }
+}
+function persist(id) {
+  if (mode === 'shared') writeDoc(id); else saveLocalMarks();
+}
+
+/* ---------- helpers ---------- */
+let toastTimer;
+function flash(msg, undoLabel) {
+  const t = $('#toast'), u = $('#undo');
+  $('#toastText').textContent = msg;
+  u.hidden = !undoLabel;
+  if (undoLabel) u.textContent = undoLabel;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.remove('show'); u.hidden = true; undoData = null; }, undoLabel ? 9000 : 3600);
+}
+function hideToast() { $('#toast').classList.remove('show'); $('#undo').hidden = true; clearTimeout(toastTimer); }
+let confirmCb = null;
+function askConfirm(msg, onYes) {
+  confirmCb = onYes;
+  $('#confirmText').textContent = msg;
+  $('#confirm').hidden = false;
+  $('#confirmYes').focus();
+}
+function closeConfirm(run) {
+  $('#confirm').hidden = true;
+  const cb = confirmCb; confirmCb = null;
+  if (run && cb) cb();
+}
+$('#confirmYes').addEventListener('click', () => closeConfirm(true));
+$('#confirmNo').addEventListener('click', () => closeConfirm(false));
+$('#confirm').addEventListener('click', e => { if (e.target.id === 'confirm') closeConfirm(false); });
+function setStatus(text, live) {
+  $('#statusText').textContent = text;
+  $('#status').classList.toggle('live', !!live);
+}
+function fitScale(st) { return Math.min(W / st.w, H / st.h) * 0.98; }
+function fit() {
+  const st = S[cur]; if (!st.url) return;
+  const s = fitScale(st);
+  st.v = { s, tx: (W - st.w * s) / 2, ty: (H - st.h * s) / 2 };
+  st.fitted = true;
+}
+function render() {
+  const st = S[cur];
+  if (!st.url) { img.hidden = true; marksEl.hidden = true; return; }
+  if (!st.v) fit();
+  if (shownUrl !== st.url) { img.src = st.url; shownUrl = st.url; }
+  img.hidden = false; marksEl.hidden = false;
+  img.style.width = st.w + 'px'; img.style.height = st.h + 'px';
+  img.style.transform = 'translate(' + st.v.tx + 'px,' + st.v.ty + 'px) scale(' + st.v.s + ')';
+  placeMarks();
+}
+function placeMarks() {
+  const st = S[cur]; if (!st.url || !st.v) return;
+  const kids = marksEl.children;
+  for (let i = 0; i < kids.length; i++) {
+    const k = st.marks[i]; if (!k) continue;
+    const x = st.v.tx + k.x * st.w * st.v.s;
+    const y = st.v.ty + k.y * st.h * st.v.s;
+    kids[i].style.transform = 'translate(calc(' + x + 'px - 50%), calc(' + y + 'px - 50%)) rotate(' + (k.r || 0) + 'deg)';
+  }
+}
+function zoomAt(cx, cy, f) {
+  const st = S[cur]; if (!st.url) return;
+  if (!st.v) fit();
+  const v = st.v, fs = fitScale(st);
+  const ns = Math.min(Math.max(v.s * f, fs * 0.5), fs * 12);
+  f = ns / v.s;
+  v.tx = cx - (cx - v.tx) * f; v.ty = cy - (cy - v.ty) * f; v.s = ns;
+  st.fitted = false;
+  render();
+}
+
+/* ---------- markers ---------- */
+function buildMarks() {
+  const st = S[cur];
+  marksEl.textContent = '';
+  st.marks.forEach((k, i) => {
+    const def = ICON[k.t];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mark' + (def.tint ? ' ' + def.tint : '') + (sel === i ? ' sel' : '');
+    b.title = def.name;
+    b.setAttribute('aria-label', def.name + ' marker');
+    b.innerHTML = def.svg;
+    b.addEventListener('pointerdown', e => startMarkDrag(e, i, b));
+    b.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); removeAt(i); });
+    marksEl.append(b);
+  });
+  syncMarkbar();
+  placeMarks();
+}
+function syncMarkbar() {
+  const k = sel == null ? null : S[cur].marks[sel];
+  $('#markbar').hidden = !k;
+  if (k) $('#markName').textContent = ICON[k.t].name;
+}
+function select(i) {
+  sel = i;
+  const kids = marksEl.children;
+  for (let n = 0; n < kids.length; n++) kids[n].classList.toggle('sel', n === i);
+  syncMarkbar();
+}
+function addMark(cx, cy) {
+  const st = S[cur]; if (!st.url || !tool) return;
+  if (!st.v) fit();
+  const x = (cx - st.v.tx) / (st.w * st.v.s);
+  const y = (cy - st.v.ty) / (st.h * st.v.s);
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
+  st.marks.push({ t: tool, x, y, r: 0 });
+  sel = st.marks.length - 1;
+  tool = null; buildPalette(); view.classList.remove('placing');
+  persist(cur); buildTabs(); buildMarks();
+}
+let mdrag = null;
+function startMarkDrag(e, i, el) {
+  e.stopPropagation(); e.preventDefault();
+  if (erase) { removeAt(i); return; }
+  const st = S[cur]; if (!st.v) fit();
+  el.setPointerCapture(e.pointerId);
+  mdrag = { i, el, x: e.clientX, y: e.clientY, moved: false };
+  if (sel !== i) select(i);
+}
+document.addEventListener('pointermove', e => {
+  if (!mdrag) return;
+  const st = S[cur], k = st.marks[mdrag.i]; if (!k) return;
+  const dx = e.clientX - mdrag.x, dy = e.clientY - mdrag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 2) mdrag.moved = true;
+  k.x = Math.min(1, Math.max(0, k.x + dx / (st.w * st.v.s)));
+  k.y = Math.min(1, Math.max(0, k.y + dy / (st.h * st.v.s)));
+  mdrag.x = e.clientX; mdrag.y = e.clientY;
+  placeMarks();
+});
+function endMarkDrag() {
+  if (!mdrag) return;
+  const moved = mdrag.moved;
+  mdrag = null;
+  if (moved) { persist(cur); buildTabs(); }
+  if (pendingSnap[cur]) {
+    if (!moved) { S[cur].marks = pendingSnap[cur]; if (sel !== null && !S[cur].marks[sel]) sel = null; buildTabs(); buildMarks(); }
+    delete pendingSnap[cur];
+  }
+}
+document.addEventListener('pointerup', endMarkDrag);
+document.addEventListener('pointercancel', endMarkDrag);
+
+function turn(deg) {
+  const k = sel == null ? null : S[cur].marks[sel]; if (!k) return;
+  k.r = ((k.r || 0) + deg + 360) % 360;
+  persist(cur); placeMarks();
+}
+function removeAt(i) {
+  const st = S[cur], k = st.marks[i]; if (!k) return;
+  undoData = {}; undoData[cur] = st.marks.slice();
+  st.marks.splice(i, 1);
+  if (sel === i) sel = null; else if (sel !== null && sel > i) sel--;
+  persist(cur); buildTabs(); buildMarks();
+  flash(ICON[k.t].name + ' removed.', 'Undo');
+}
+function removeMark() { if (sel != null) removeAt(sel); }
+function clearMarks(all) {
+  const ids = all ? MAPS.map(m => m.id) : [cur];
+  if (!ids.some(id => S[id].marks.length)) { flash(all ? 'No markers on any map yet.' : 'No markers on this map yet.'); return; }
+  undoData = {};
+  ids.forEach(id => { undoData[id] = S[id].marks; S[id].marks = []; persist(id); });
+  sel = null; buildTabs(); buildMarks();
+  flash(all ? 'Markers cleared on all four maps.' : 'Markers cleared on this map.', 'Undo');
+}
+$('#undo').addEventListener('click', () => {
+  if (!undoData) return;
+  Object.keys(undoData).forEach(id => { if (S[id]) { S[id].marks = undoData[id]; persist(id); } });
+  undoData = null; hideToast(); buildTabs(); buildMarks();
+});
+
+/* ---------- screenshots (always stored per-browser via IndexedDB) ---------- */
+function showUrl(id, url, blobUrl) {
+  const probe = new Image();
+  probe.onload = () => {
+    const st = S[id];
+    if (st.url && st.url !== url) URL.revokeObjectURL(st.url);
+    st.url = url;
+    st.w = probe.naturalWidth; st.h = probe.naturalHeight; st.v = null; st.fitted = true;
+    buildTabs(); syncEmpty(); render(); if (id === cur) buildMarks();
+  };
+  probe.onerror = () => {
+    if (blobUrl) URL.revokeObjectURL(url);
+    flash('That screenshot could not be opened.');
+  };
+  probe.src = url;
+}
+function showBlob(id, blob) { showUrl(id, URL.createObjectURL(blob), true); }
+
+async function takeFile(file) {
+  if (!file || !file.type || !file.type.startsWith('image/')) { flash('Choose an image file (PNG, JPG or WebP).'); return; }
+  const id = cur;
+  showBlob(id, file);
+  try { await dbPut(id, file); } catch (e) { flash('This screenshot will only last until you close the page.'); }
+}
+
+/* ---------- interface ---------- */
+function buildTabs() {
+  const ul = $('#tabs'); ul.textContent = '';
+  MAPS.forEach(m => {
+    const st = S[m.id];
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tab';
+    if (m.id === cur) b.setAttribute('aria-current', 'true');
+    const th = document.createElement('span');
+    th.className = 'thumb' + (st.url ? ' has' : '');
+    if (st.url) th.style.backgroundImage = 'url("' + st.url + '")';
+    const tx = document.createElement('span');
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = m.name;
+    const s = document.createElement('span'); s.className = 'stat';
+    const c = st.marks.length;
+    s.textContent = (st.url ? 'Screenshot added' : 'No screenshot yet') + (c ? ' \u00b7 ' + c + ' marker' + (c > 1 ? 's' : '') : '');
+    tx.append(n, s); b.append(th, tx);
+    b.addEventListener('click', () => selectMap(m.id));
+    li.append(b); ul.append(li);
+  });
+}
+function buildItems() {
+  const ul = $('#items'); ul.textContent = '';
+  ITEMS.forEach(it => {
+    const def = ICON[it.id];
+    const li = document.createElement('li');
+    const lab = document.createElement('label');
+    lab.className = 'item' + (GOT[it.id] ? ' got' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = !!GOT[it.id];
+    cb.addEventListener('change', () => toggleGot(it.id, cb.checked));
+    const icon = document.createElement('span'); icon.innerHTML = def.svg;
+    const name = document.createElement('span'); name.textContent = it.name;
+    lab.append(cb, icon, name); li.append(lab); ul.append(li);
+  });
+}
+function toggleGot(id, val) {
+  GOT[id] = val;
+  buildItems();
+  if (mode === 'shared') writeItems(); else saveLocalItems();
+}
+function buildPalette() {
+  const ul = $('#palette'); ul.textContent = '';
+  ICONS.forEach(ic => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pick';
+    b.setAttribute('aria-pressed', tool === ic.id ? 'true' : 'false');
+    b.title = ic.name;
+    b.innerHTML = ic.svg + '<span>' + ic.name + '</span>';
+    if (ic.tint) b.style.color = 'var(--key-' + (ic.tint === 'med' ? 'red' : ic.tint) + ')';
+    b.addEventListener('click', () => {
+      tool = tool === ic.id ? null : ic.id;
+      if (tool) setErase(false);
+      buildPalette(); view.classList.toggle('placing', !!tool);
+      if (tool) flash('Click the map to drop a ' + ic.name.toLowerCase() + '.');
+    });
+    li.append(b); ul.append(li);
+  });
+}
+function setErase(on) {
+  erase = !!on;
+  const b = $('#eraser');
+  b.setAttribute('aria-pressed', erase ? 'true' : 'false');
+  b.textContent = erase ? 'Done removing' : 'Remove markers';
+  view.classList.toggle('erasing', erase);
+  if (erase) { tool = null; buildPalette(); view.classList.remove('placing'); }
+}
+function canAddImages() { return true; }
+function syncEmpty() {
+  const has = !!S[cur].url;
+  $('#empty').hidden = has;
+  $('#toolbar').hidden = !has;
+  $('#emptyName').textContent = MAPS.find(m => m.id === cur).name;
+  $('#emptyNote').textContent = 'No screenshot yet. Paste one with Ctrl+V, drop a file here, or choose one. (Screenshots stay in this browser \u2014 add them separately on each device.)';
+}
+function selectMap(id) {
+  if (!S[id]) return;
+  cur = id; sel = null;
+  try { localStorage.setItem('hm:cur', id); } catch (e) {}
+  buildTabs(); syncEmpty(); render(); buildMarks();
+}
+function resize() {
+  const r = stage.getBoundingClientRect();
+  W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+  MAPS.forEach(m => { if (S[m.id].fitted) S[m.id].v = null; });
+  render();
+}
+
+/* ---------- drag to move, scroll to zoom ---------- */
+let pan = null;
+view.addEventListener('pointerdown', e => {
+  const st = S[cur]; if (!st.url) return;
+  if (!st.v) fit();
+  view.setPointerCapture(e.pointerId);
+  pan = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
+  view.classList.add('drag');
+});
+view.addEventListener('pointermove', e => {
+  if (!pan) return;
+  const st = S[cur];
+  st.v.tx += e.clientX - pan.x; st.v.ty += e.clientY - pan.y;
+  pan.x = e.clientX; pan.y = e.clientY;
+  if (Math.abs(e.clientX - pan.sx) + Math.abs(e.clientY - pan.sy) > 3) pan.moved = true;
+  st.fitted = false; render();
+});
+view.addEventListener('pointerup', e => {
+  if (pan && !pan.moved) {
+    const r = view.getBoundingClientRect();
+    if (tool) addMark(e.clientX - r.left, e.clientY - r.top);
+    else if (sel !== null) select(null);
+  }
+  pan = null; view.classList.remove('drag');
+});
+view.addEventListener('pointercancel', () => { pan = null; view.classList.remove('drag'); });
+view.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = view.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+view.addEventListener('dblclick', () => { fit(); render(); });
+
+$('#zin').addEventListener('click', () => zoomAt(W / 2, H / 2, 1.4));
+$('#zout').addEventListener('click', () => zoomAt(W / 2, H / 2, 1 / 1.4));
+$('#fit').addEventListener('click', () => { fit(); render(); });
+$('#replace').addEventListener('click', () => $('#file').click());
+$('#choose').addEventListener('click', () => $('#file').click());
+$('#clear').addEventListener('click', () => {
+  askConfirm('Clear markers on this map?', () => clearMarks(false));
+});
+$('#clearAll').addEventListener('click', () => {
+  askConfirm('Clear markers on all four maps? This can\'t be undone after the next change.', () => clearMarks(true));
+});
+$('#rotl').addEventListener('click', () => turn(-15));
+$('#rotr').addEventListener('click', () => turn(15));
+$('#del').addEventListener('click', removeMark);
+$('#eraser').addEventListener('click', () => {
+  setErase(!erase);
+  if (erase) flash('Click any marker to remove it.');
+});
+$('#file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; takeFile(f); });
+
+stage.addEventListener('dragover', e => e.preventDefault());
+stage.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) takeFile(f); });
+document.addEventListener('paste', e => {
+  const f = e.clipboardData && [...e.clipboardData.files].find(x => x.type.startsWith('image/'));
+  if (f) { e.preventDefault(); takeFile(f); }
+});
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape') {
+    if (!$('#confirm').hidden) { closeConfirm(false); return; }
+    tool = null; sel = null; setErase(false); buildPalette(); view.classList.remove('placing'); buildMarks(); return;
+  }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel !== null) { e.preventDefault(); removeMark(); return; }
+  if (sel !== null && (e.key === '[' || e.key === ']')) { turn(e.key === '[' ? -15 : 15); return; }
+  const i = '1234'.indexOf(e.key);
+  if (i > -1) selectMap(MAPS[i].id);
+});
+
+/* ---------- start ---------- */
+function loadScreenshots() {
+  (async () => {
+    for (const m of MAPS) {
+      try { const b = await dbGet(m.id); if (b) showBlob(m.id, b); } catch (e) { break; }
+    }
+  })();
+}
+function startLocal() {
+  mode = 'local';
+  setStatus('Not connected \u2014 saved in this browser only', false);
+  loadLocalMarks();
+  buildTabs(); syncEmpty(); buildMarks(); render(); buildItems();
+}
+async function start() {
+  buildTabs(); buildPalette(); syncEmpty(); resize(); buildMarks(); buildItems();
+  loadScreenshots();
+  if (typeof firebase === 'undefined' || !firebase.apps) { startLocal(); return; }
+  setStatus('Connecting\u2026', false);
+  try {
+    firebase.initializeApp(firebaseConfig);
+    fdb = firebase.firestore();
+    try { fdb.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
+    mode = 'shared';
+    setStatus('Live \u2014 markers and items sync with anyone who opens this file', true);
+    subscribe();
+  } catch (e) {
+    startLocal();
+  }
+}
+new ResizeObserver(resize).observe(stage);
+start();
+})();
+</script>
+</body>
+</html>
